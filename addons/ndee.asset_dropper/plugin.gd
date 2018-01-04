@@ -36,7 +36,7 @@ var place_stuff_hist = false
 var resource_assets = []
 var resource_asset_index = 0
 
-var asset_scale_ratio
+var asset_scale_ratio = Vector2(1,1)
 var asset_instance
 var asset_preview
 var asset_instance_init_scale = Vector2()
@@ -94,6 +94,8 @@ var key_settings
 
 var constraint_x = false
 var constraint_y = false
+
+var forward_input = false
 
 var ui_settings = {
 	"draw_mode":0,
@@ -158,7 +160,7 @@ func load_settings():
 	if save_file_res.file_exists("ndee.asset_dropper.settings"):
 		save_file_res.open("ndee.asset_dropper.settings",File.READ)
 		#settings = save_file_res.get_as_text()
-		settings.parse_json(save_file_res.get_as_text())
+		settings = parse_json(save_file_res.get_as_text())
 		save_file_res.close()
 		
 	else:
@@ -167,7 +169,7 @@ func load_settings():
 func save_settings():
 	var save_file_res = File.new()
 	save_file_res.open("ndee.asset_dropper.settings",File.WRITE)
-	save_file_res.store_string(settings.to_json())
+	save_file_res.store_string(to_json(settings))
 	save_file_res.close()
 
 func show_msg_dialog(text=""):
@@ -176,7 +178,7 @@ func show_msg_dialog(text=""):
 	var msg = msg_res.instance()
 	msg.set_script(script)
 	msg.msg = text
-	get_base_control().add_child(msg)
+	get_editor_interface().get_base_control().add_child(msg)
 
 func get_random_asset_index():
 	var length = resource_assets.size()
@@ -190,18 +192,18 @@ func get_random_asset_index():
 	return settings["group_indices"][settings["active_group"]]
 
 func run_undo(node,selection):
-	get_selection().clear()
+	get_editor_interface().get_selection().clear()
 	node.free()
 	for node in selection:
-		get_selection().add_node(node)
+		get_editor_interface().get_selection().add_node(node)
 	asset_instance = null
 	
 func run_draw_undo(nodes,selection):
-	get_selection().clear()
+	get_editor_interface().get_selection().clear()
 	for node in nodes:
 		node.free()
 	for node in selection:
-		get_selection().add_node(node)
+		get_editor_interface().get_selection().add_node(node)
 	asset_instance = null
 
 func add_item(parent,pos,set_owner=true):
@@ -224,9 +226,9 @@ func add_item(parent,pos,set_owner=true):
 	asset_instance.set_scale(asset_instance.get_scale() * flip_asset)
 	
 	var parent_offset = Vector2(0,0)
-	parent_offset =  parent.get_global_transform() * parent.get_global_pos()
-	asset_instance.set_global_pos(asset_pos)
-	asset_instance_init_rot = asset_instance.get_rot()
+	parent_offset =  parent.get_global_transform() * parent.get_global_position()
+	asset_instance.set_global_position(asset_pos)
+	asset_instance_init_rot = asset_instance.get_rotation()
 	asset_instance_init_scale = asset_instance.get_scale()
 	
 	### remove dropped assets from groups
@@ -242,7 +244,7 @@ func add_preview(parent,pos):
 			parent = resource_assets[resource_asset_index].get_parent()
 		parent.add_child(asset_preview)
 			
-		asset_preview.set_global_pos(pos)
+		asset_preview.set_global_position(pos)
 		asset_preview.set_name("preview")
 		asset_preview.set_scale(asset_preview.get_scale() * flip_asset)
 		
@@ -254,39 +256,23 @@ func transform_asset_preview():
 			asset_pos = Vector2(stepify(mouse_pos.x,grid_size.get_value()),stepify(mouse_pos.y,grid_size.get_value()))
 		else:
 			asset_pos = mouse_pos
-		asset_preview.set_global_pos(asset_pos)
+		asset_preview.set_global_position(asset_pos)
 			
 func delete_preview():
 	if asset_preview != null:
 		asset_preview.queue_free()
 		asset_preview = null
-	
-func print_stuff(tree):
-	for item in tree.get_root().get_children():
-		for item2 in item.get_children():
-			
-			
-			if "@ItemListEditorPlugin9261" == item2.get_name():
-				print(item2.get_function_list())
-				
-func _input(ev):
-	if viewport != null:
-		if ev.type == InputEvent.MOUSE_MOTION:
-			#print(viewport.get_final_transform() * viewport.get_mouse_pos())
-			mouse_pos = viewport.get_global_canvas_transform().affine_inverse() * (ev.pos - offset)
-			mouse_pos_os = ev.pos
-			#print( Vector2(stepify(mouse_pos.x,grid_position),stepify(mouse_pos.y,grid_position)))
 
 
 func move_node_in_tree():
 	if  Input.is_key_pressed(KEY_PAGEDOWN):
-		var nodes = get_selection().get_selected_nodes()
+		var nodes = get_editor_interface().get_selection().get_selected_nodes()
 		for node in nodes:
 			if node.get_index() < node.get_parent().get_child_count()-1:
 				node.get_parent().move_child(node,node.get_index()+1)
 		return true
 	elif  Input.is_key_pressed(KEY_PAGEUP):
-		var nodes = get_selection().get_selected_nodes()
+		var nodes = get_editor_interface().get_selection().get_selected_nodes()
 		for node in nodes:
 			if node.get_index() > 0:
 				node.get_parent().move_child(node,node.get_index()-1)
@@ -306,7 +292,7 @@ func add_to_group():
 					if get_tree().has_group(group_name):
 						for node in get_tree().get_nodes_in_group(group_name):
 							node.remove_from_group(group_name)
-				for node in get_selection().get_selected_nodes():
+				for node in get_editor_interface().get_selection().get_selected_nodes():
 					node.add_to_group(group_name,true)
 					
 				resource_assets = get_tree().get_nodes_in_group(group_name)
@@ -418,7 +404,7 @@ func draw_asset_behavior(forward_input):
 		#mouse_pos_stamp = mouse_pos
 		### register undo step
 		get_undo_redo().create_action("Draw Assets")
-		get_undo_redo().add_undo_method(self,"run_draw_undo",draw_stroke_assets,get_selection().get_selected_nodes())
+		get_undo_redo().add_undo_method(self,"run_draw_undo",draw_stroke_assets,get_editor_interface().get_selection().get_selected_nodes())
 		get_undo_redo().commit_action()
 		
 		### reload asset preview
@@ -439,14 +425,14 @@ func drop_asset_behavior(forward_input):
 		add_item(target_node,mouse_pos)
 		
 		var mouse_offset = Vector2(400,0)* resource_assets[resource_asset_index].get_scale().x * viewport.get_global_canvas_transform().get_scale().x
-		Input.warp_mouse_pos(Vector2(mouse_pos_os) + mouse_offset)
+		Input.warp_mouse_position(Vector2(mouse_pos_os) + mouse_offset)
 		
 		### set asset x y scale ratio
 		asset_scale_ratio = Vector2(1,resource_assets[resource_asset_index].get_scale().y / resource_assets[resource_asset_index].get_scale().x)
 		
 		### register undo step
 		get_undo_redo().create_action("Drop Asset")
-		get_undo_redo().add_undo_method(self,"run_undo",asset_instance,get_selection().get_selected_nodes())
+		get_undo_redo().add_undo_method(self,"run_undo",asset_instance,get_editor_interface().get_selection().get_selected_nodes())
 		get_undo_redo().commit_action()
 		
 		
@@ -460,7 +446,7 @@ func drop_asset_behavior(forward_input):
 		var pos = mouse_pos-mouse_asset_offset
 		if use_grid_size.is_pressed():
 			pos = Vector2(stepify(pos.x,grid_size.get_value()),stepify(pos.y,grid_size.get_value()))
-		asset_instance.set_global_pos(pos)
+		asset_instance.set_global_position(pos)
 		mouse_pos_os_stamp = Vector2(pos)
 		mouse_pos_stamp = mouse_pos - mouse_asset_offset
 		
@@ -506,7 +492,6 @@ func drop_asset_behavior(forward_input):
 					if use_grid_scale.is_pressed():
 						final_scale = Vector2(stepify(final_scale.x,grid_scale.get_value()),stepify(final_scale.y,grid_scale.get_value())) * asset_scale_ratio
 					
-#						asset_instance.set_scale(final_scale * flip_asset)
 					if constraint_x:
 						asset_instance.set_scale(Vector2(final_scale.x,abs(asset_instance.get_scale().y)) * flip_asset)
 					elif constraint_y:
@@ -519,11 +504,11 @@ func drop_asset_behavior(forward_input):
 					if use_grid_angle.is_pressed():
 						final_rot = stepify(final_rot,deg2rad(grid_angle.get_value()))
 					if dir_vec.x < 0:
-						asset_instance.set_rot(final_rot)
+						asset_instance.set_rotation(final_rot)
 					elif dir_vec.x > 0:
-						asset_instance.set_rot(final_rot + PI)
+						asset_instance.set_rotation(final_rot + PI)
 			else:
-				asset_instance.set_rot(-asset_instance.get_parent().get_global_transform().get_rotation())
+				asset_instance.set_rotation(-asset_instance.get_parent().get_global_transform().get_rotation())
 				asset_instance.set_scale( resource_assets[resource_asset_index].get_scale() * flip_asset * asset_scale_ratio)
 		
 		### apply transformation
@@ -535,11 +520,11 @@ func drop_asset_behavior(forward_input):
 			asset_instance = null
 		if mouse_l == 3:
 			mouse_apply = 0
-			#get_selection().clear()
-			#get_selection().add_node(asset_instance)
+			#get_editor_interface().get_selection().clear()
+			#get_editor_interface().get_selection().add_node(asset_instance)
 			
 			asset_instance = null
-			Input.warp_mouse_pos(Vector2(mouse_pos_os_stamp))
+			Input.warp_mouse_position(Vector2(mouse_pos_os_stamp))
 			get_random_asset_index()
 			add_preview(target_node,mouse_pos_stamp)
 			
@@ -550,11 +535,11 @@ func drop_asset_behavior(forward_input):
 			constraint_y = false
 			constraint_x = false
 			mouse_apply = 0
-			asset_instance.set_rot(asset_instance_init_rot)
+			asset_instance.set_rotation(asset_instance_init_rot)
 			asset_instance.set_scale(asset_instance_init_scale)
 			
 			var mouse_offset = Vector2(400,0)* resource_assets[resource_asset_index].get_scale().x * viewport.get_global_canvas_transform().get_scale().x
-			Input.warp_mouse_pos(Vector2(mouse_pos_os_stamp) + mouse_offset)
+			Input.warp_mouse_position(Vector2(mouse_pos_os_stamp) + mouse_offset)
 	elif key_a == 3:
 		delete_preview()
 	else:
@@ -567,14 +552,11 @@ func drop_asset_behavior(forward_input):
 	
 	return forward_input
 
-func handles(object):
-	return true
-
 func open_settings_menu():
 	asset_dropper_ui.hide()
 	asset_dropper_ui.popup()
 	var offset = asset_dropper_ui.get_size() * 0.5
-	asset_dropper_ui.set_pos(mouse_pos_os - offset)
+	asset_dropper_ui.set_position(mouse_pos_os - offset)
 	
 
 func scrub_through_assets():
@@ -594,8 +576,13 @@ func scrub_through_assets():
 		delete_preview()
 		add_preview(target_node,Vector2(0,0))
 
-func forward_input_event(event):
-	
+func handles(object):
+	return true
+
+func forward_canvas_gui_input(event):
+	return forward_input
+
+func _input(event):
 	mouse_l = mouse_l_input.check()
 	mouse_r = mouse_r_input.check()
 	key_a = key_a_input.check()
@@ -611,7 +598,7 @@ func forward_input_event(event):
 	
 	resource_asset_index = settings["group_indices"][settings["active_group"]]
 	
-	var forward_input = false
+	forward_input = false
 	forward_input = forward_input or move_node_in_tree()
 	forward_input = forward_input or add_to_group()
 	forward_input = forward_input or set_group_as_resource_assets()
@@ -627,9 +614,12 @@ func forward_input_event(event):
 
 	if root_node != null:
 		viewport = root_node.get_viewport()
-		
-		
-		
+	
+	if viewport != null:
+		if event is InputEventMouseMotion:
+			mouse_pos = viewport.get_global_canvas_transform().affine_inverse() * (event.position - offset)
+			mouse_pos_os = event.position
+	
 	if root_node != null and (resource_asset_index <= resource_assets.size()-1) and resource_assets[resource_asset_index] != null and resource_assets[resource_asset_index].get_owner() != null:
 		if key_a in [1,2]:
 			if key_f == 1:
@@ -650,13 +640,13 @@ func forward_input_event(event):
 				forward_input = forward_input or drop_asset_behavior(forward_input)
 			elif draw_mode == "Draw":
 				forward_input = forward_input or draw_asset_behavior(forward_input)
-		
-	
-	return forward_input
+
 
 
 func set_target_node():
-	target_node = get_selection().get_selected_nodes()[0]
+	var selection = get_editor_interface().get_selection().get_selected_nodes()
+	if not selection.empty():
+		target_node = selection[0]
 func clear_target_node():
 	target_node = null
 
@@ -678,33 +668,19 @@ func draw_mode_select(idx):
 func toggle_use_grid_size(pressed):
 	stroke_distance.set_editable(!pressed)
 	grid_size.set_editable(pressed)
-	if pressed:
-		grid_size.get_node("Label").set_opacity(1.0)
-	else:
-		grid_size.get_node("Label").set_opacity(.5)
 
 func toggle_use_grid_angle(pressed):
 	grid_angle.set_editable(pressed)
-	if pressed:
-		grid_angle.get_node("Label").set_opacity(1.0)
-	else:
-		grid_angle.get_node("Label").set_opacity(.5)
 	
 func toggle_use_grid_scale(pressed):
 	grid_scale.set_editable(pressed)
-	if pressed:
-		grid_scale.get_node("Label").set_opacity(1.0)
-	else:
-		grid_scale.get_node("Label").set_opacity(.5)
 
 func _enter_tree():
-	
-	print("enter tree")
 	set_process_input(true)
 	
 	var ui_res = preload("AssetDropperUI.tscn")
 	asset_dropper_ui = ui_res.instance()
-	get_base_control().add_child(asset_dropper_ui)
+	get_editor_interface().get_base_control().add_child(asset_dropper_ui)
 	
 	asset_dropper_ui.get_node("set_target_node").connect("pressed",self,"set_target_node")
 	asset_dropper_ui.get_node("clear_target_node").connect("pressed",self,"clear_target_node")
@@ -731,6 +707,7 @@ func _enter_tree():
 	stroke_distance = asset_dropper_ui.get_node("draw_mode/stroke_distance")
 	
 	ui_button = Button.new()
+	ui_button.flat = true
 	ui_button.set_name("Asset Dropper")
 	ui_button.set_text("Asset Dropper")
 	add_control_to_container(EditorPlugin.CONTAINER_CANVAS_EDITOR_MENU,ui_button)
@@ -745,7 +722,6 @@ func _exit_tree():
 	
 	set_process_input(false)
 	
-	print("exit tree")
 	if ui_button != null:
 		ui_button.free()
 		ui_button = null

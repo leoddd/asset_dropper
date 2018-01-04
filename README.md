@@ -1,3 +1,7 @@
+# THIS IS NOT FINISHED. THERE IS AN ISSUE WITH INPUT FORWARDING (ONLY MOUSE EVENTS ARE RECOGNIZED) WHICH LEAD TO VERY STRANGE BEHAVIOR.
+If you're ndee85, feel free to base any porting efforts on this, however, as it does mostly work outside of the above issues.
+Look into `_input()` and `forward_canvas_gui_input()` to fix this. (Also a note to self.)
+
 # Asset Dropper - Godot Plugin
 Asset Dropper is a plugin for Godots AssetLib. It provides tools to create a fast workflow for 2D level creation.
 
